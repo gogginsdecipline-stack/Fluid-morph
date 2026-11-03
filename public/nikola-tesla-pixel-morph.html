@@ -1,0 +1,943 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Nikola Tesla · WebGL Fluid Pixel Morph</title>
+  <style>
+    * { box-sizing: border-box; margin: 0; padding: 0; user-select: none; }
+    body, html {
+      width: 100%; height: 100%;
+      background: #09090b;
+      color: #f4f4f5;
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+      overflow: hidden;
+    }
+    #glCanvas {
+      position: absolute;
+      top: 0; left: 0;
+      width: 100vw; height: 100vh;
+      display: block;
+      z-index: 1;
+      cursor: crosshair;
+    }
+    /* Floating Glass HUD */
+    .hud {
+      position: absolute;
+      top: 18px; left: 18px;
+      z-index: 20;
+      background: rgba(15, 17, 23, 0.90);
+      backdrop-filter: blur(16px);
+      border: 1px solid rgba(255, 255, 255, 0.12);
+      border-radius: 16px;
+      padding: 16px 20px;
+      width: 340px;
+      box-shadow: 0 20px 45px rgba(0,0,0,0.65);
+      transition: all 0.2s ease;
+    }
+    .hud-header {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      margin-bottom: 12px;
+      padding-bottom: 8px;
+      border-bottom: 1px solid rgba(255, 255, 255, 0.08);
+    }
+    .hud-title {
+      font-size: 13px;
+      font-weight: 700;
+      letter-spacing: 0.06em;
+      text-transform: uppercase;
+      color: #38bdf8;
+    }
+    .badge {
+      font-size: 10px;
+      font-family: monospace;
+      color: #34d399;
+    }
+    .metrics {
+      font-family: monospace;
+      font-size: 11px;
+      color: #a1a1aa;
+    }
+    .section-title {
+      font-size: 10px;
+      font-weight: 700;
+      letter-spacing: 0.08em;
+      text-transform: uppercase;
+      color: #71717a;
+      margin-bottom: 6px;
+    }
+    .control-group {
+      margin-bottom: 10px;
+    }
+    .control-label {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      font-size: 11px;
+      font-weight: 500;
+      color: #d4d4d8;
+      margin-bottom: 4px;
+    }
+    input[type=range] {
+      width: 100%;
+      accent-color: #38bdf8;
+      cursor: pointer;
+    }
+    /* Source selection grid */
+    .source-grid {
+      display: grid;
+      grid-template-columns: repeat(2, 1fr);
+      gap: 6px;
+      margin-bottom: 10px;
+    }
+    .source-btn {
+      display: flex;
+      align-items: center;
+      gap: 6px;
+      background: rgba(255, 255, 255, 0.06);
+      border: 1px solid rgba(255, 255, 255, 0.1);
+      color: #d4d4d8;
+      padding: 8px 10px;
+      border-radius: 9px;
+      font-size: 11px;
+      font-weight: 600;
+      cursor: pointer;
+      transition: all 0.15s ease;
+      white-space: nowrap;
+    }
+    .source-btn:hover {
+      background: rgba(56, 189, 248, 0.15);
+      border-color: rgba(56, 189, 248, 0.4);
+      color: #ffffff;
+    }
+    .source-btn.active {
+      background: rgba(14, 165, 233, 0.25);
+      border-color: #38bdf8;
+      color: #38bdf8;
+      box-shadow: 0 0 12px rgba(56, 189, 248, 0.2);
+    }
+    .source-btn svg {
+      width: 14px;
+      height: 14px;
+      flex-shrink: 0;
+    }
+    /* Active Source Status Card */
+    .source-status-card {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      background: rgba(24, 24, 27, 0.7);
+      border: 1px solid rgba(255, 255, 255, 0.08);
+      border-radius: 9px;
+      padding: 6px 10px;
+      margin-bottom: 12px;
+      font-size: 11px;
+    }
+    .source-status-info {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      overflow: hidden;
+    }
+    .source-thumb {
+      width: 22px;
+      height: 22px;
+      border-radius: 4px;
+      object-fit: cover;
+      border: 1px solid rgba(255, 255, 255, 0.2);
+      flex-shrink: 0;
+      background: #18181b;
+    }
+    .source-name {
+      color: #f4f4f5;
+      font-weight: 500;
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      max-width: 170px;
+    }
+    .source-action-link {
+      color: #38bdf8;
+      text-decoration: none;
+      font-size: 10px;
+      font-weight: 600;
+      cursor: pointer;
+      padding: 2px 6px;
+      border-radius: 4px;
+      background: rgba(56, 189, 248, 0.1);
+    }
+    .source-action-link:hover {
+      background: rgba(56, 189, 248, 0.2);
+    }
+    /* Auto Resolution Box */
+    .auto-res-box {
+      background: rgba(24, 24, 27, 0.6);
+      border: 1px solid rgba(255, 255, 255, 0.08);
+      border-radius: 10px;
+      padding: 8px 10px;
+      margin-bottom: 10px;
+    }
+    .auto-toggle-btn {
+      font-size: 10px;
+      font-weight: 600;
+      color: #38bdf8;
+      background: rgba(56, 189, 248, 0.12);
+      border: 1px solid rgba(56, 189, 248, 0.3);
+      border-radius: 5px;
+      padding: 2px 6px;
+      cursor: pointer;
+      transition: all 0.15s ease;
+    }
+    .auto-toggle-btn:hover {
+      background: rgba(56, 189, 248, 0.25);
+    }
+    .btn-row {
+      display: grid;
+      grid-template-columns: repeat(2, 1fr);
+      gap: 6px;
+      margin-top: 8px;
+    }
+    button.action-btn {
+      background: rgba(255, 255, 255, 0.07);
+      border: 1px solid rgba(255, 255, 255, 0.12);
+      color: #fafafa;
+      padding: 8px 10px;
+      border-radius: 8px;
+      font-size: 11px;
+      font-weight: 600;
+      cursor: pointer;
+      transition: all 0.15s ease;
+      white-space: nowrap;
+    }
+    button.action-btn:hover {
+      background: rgba(56, 189, 248, 0.22);
+      border-color: #38bdf8;
+    }
+    button.primary {
+      background: #0284c7;
+      border-color: #38bdf8;
+      color: #ffffff;
+      box-shadow: 0 4px 14px rgba(2, 132, 199, 0.35);
+    }
+    button.primary:hover {
+      background: #0369a1;
+    }
+    /* Drawing Modal */
+    #drawModal {
+      display: none;
+      position: absolute;
+      top: 18px; right: 18px;
+      z-index: 25;
+      background: rgba(15, 17, 23, 0.94);
+      backdrop-filter: blur(14px);
+      border: 1px solid rgba(255, 255, 255, 0.15);
+      border-radius: 16px;
+      padding: 16px;
+      box-shadow: 0 20px 40px rgba(0,0,0,0.6);
+    }
+    #drawCanvas {
+      background: #18181b;
+      border-radius: 8px;
+      cursor: crosshair;
+      display: block;
+      margin-bottom: 8px;
+    }
+    .ref-badge {
+      position: absolute;
+      bottom: 18px; right: 18px;
+      z-index: 20;
+      background: rgba(15, 17, 23, 0.7);
+      backdrop-filter: blur(10px);
+      border: 1px solid rgba(255, 255, 255, 0.1);
+      border-radius: 12px;
+      padding: 6px 12px;
+      font-size: 11px;
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+    #dropZoneOverlay {
+      display: none;
+      position: absolute;
+      top: 0; left: 0; width: 100%; height: 100%;
+      background: rgba(14, 165, 233, 0.2);
+      backdrop-filter: blur(4px);
+      border: 3px dashed #38bdf8;
+      z-index: 50;
+      align-items: center;
+      justify-content: center;
+      color: #38bdf8;
+      font-size: 20px;
+      font-weight: 700;
+      pointer-events: none;
+    }
+  </style>
+</head>
+<body>
+  <canvas id="glCanvas"></canvas>
+  <div id="dropZoneOverlay">Drop Image Anywhere to Morph</div>
+
+  <div class="hud">
+    <div class="hud-header">
+      <div>
+        <div class="hud-title">Nikola Tesla Morph</div>
+        <div class="badge">True Color Optimal Transport</div>
+      </div>
+      <div class="metrics">
+        <span id="fpsDisplay">60</span> FPS
+      </div>
+    </div>
+
+    <!-- Source Input Selector -->
+    <div class="section-title">Source Input Method</div>
+    <div class="source-grid">
+      <button id="btnUploadImage" class="source-btn">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/></svg>
+        <span>Upload Image</span>
+      </button>
+
+      <button id="btnWebcam" class="source-btn">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M14.5 4h-5L7 7H4a2 2 0 0 0-2 2v9a2 2 0 0 0 2 2h16a2 2 0 0 0 2-2V9a2 2 0 0 0-2-2h-3l-2.5-3z"/><circle cx="12" cy="13" r="3"/></svg>
+        <span>Live Webcam</span>
+      </button>
+
+      <button id="btnDraw" class="source-btn">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M18.375 2.625a2.121 2.121 0 1 1 3 3L12 15l-4 1 1-4Z"/></svg>
+        <span>Draw Canvas</span>
+      </button>
+
+      <button id="btnPattern" class="source-btn active">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M2 12c2.5-4 5-4 7 0s4.5 4 7 0 4.5-4 6 0"/></svg>
+        <span>Wave Pattern</span>
+      </button>
+    </div>
+
+    <input type="file" id="imageFileInput" accept="image/*" style="display:none;" />
+
+    <!-- Current Active Source Card -->
+    <div class="source-status-card" id="sourceStatusCard">
+      <div class="source-status-info">
+        <img id="sourceStatusThumb" class="source-thumb" src="data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='22' height='22' viewBox='0 0 24 24' fill='none' stroke='%2338bdf8' stroke-width='2'><path d='M2 12c2.5-4 5-4 7 0s4.5 4 7 0 4.5-4 6 0'/></svg>" alt="source" />
+        <span id="sourceStatusName" class="source-name">Wave Pattern</span>
+      </div>
+      <span id="sourceActionBtn" class="source-action-link" style="display:none;">Change</span>
+    </div>
+
+    <!-- Automatic Particle Count Feature (Image-Based) -->
+    <div class="auto-res-box">
+      <div class="control-label">
+        <span style="font-weight: 600; color:#f4f4f5;">Automatic Particle Count</span>
+        <button id="btnToggleAuto" class="auto-toggle-btn">Auto: ON</button>
+      </div>
+      <div style="display:flex; justify-content:space-between; font-size:11px; color:#a1a1aa; font-family:monospace; margin-top:2px;">
+        <span>Sampled Pixels:</span>
+        <span id="resVal" style="color:#38bdf8; font-weight:600;">52,000 (Auto)</span>
+      </div>
+      <div id="manualSliderContainer" style="display:none; margin-top:6px;">
+        <input type="range" id="resSlider" min="20000" max="80000" step="5000" value="52000">
+      </div>
+    </div>
+
+    <!-- Physics Controls (Direct Spring & Viscosity without Turbulence) -->
+    <div class="control-group">
+      <div class="control-label">
+        <span>Spring Easing (Speed)</span>
+        <span id="springVal" class="metrics">2.0</span>
+      </div>
+      <input type="range" id="springSlider" min="0.5" max="4.0" step="0.1" value="2.0">
+    </div>
+
+    <div class="control-group">
+      <div class="control-label">
+        <span>Fluid Viscosity (Damping)</span>
+        <span id="dampVal" class="metrics">0.92</span>
+      </div>
+      <input type="range" id="dampSlider" min="0.80" max="0.98" step="0.01" value="0.92">
+    </div>
+
+    <div class="btn-row">
+      <button id="btnMorphTesla" class="action-btn primary">Morph to Tesla</button>
+      <button id="btnExplode" class="action-btn">Disperse / Shock</button>
+    </div>
+
+    <div style="margin-top: 8px;">
+      <button id="btnReset" class="action-btn" style="width: 100%;">Reset to Source Positions</button>
+    </div>
+  </div>
+
+  <div class="ref-badge">
+    <span style="color:#38bdf8;">✦</span> Nikola Tesla Target Reference
+  </div>
+
+  <!-- Drawing Panel -->
+  <div id="drawModal">
+    <div class="hud-header">
+      <span class="hud-title" style="font-size:12px;">Draw Custom Pixels</span>
+      <button id="btnCloseDraw" style="padding: 2px 6px; background:transparent; border:none; color:#a1a1aa; cursor:pointer;">✕</button>
+    </div>
+    <canvas id="drawCanvas" width="220" height="280"></canvas>
+    <div class="btn-row">
+      <button id="btnMorphDrawing" class="action-btn primary">Morph Draw</button>
+      <button id="btnClearDraw" class="action-btn">Clear</button>
+    </div>
+  </div>
+
+  <video id="webcamVideo" autoplay playsinline muted style="display:none;"></video>
+
+  <script>
+    const canvas = document.getElementById('glCanvas');
+    const gl = canvas.getContext('webgl', { alpha: false, preserveDrawingBuffer: true });
+
+    function makeShader(gl, type, src) {
+      const s = gl.createShader(type);
+      gl.shaderSource(s, src);
+      gl.compileShader(s);
+      return s;
+    }
+    const vs = makeShader(gl, gl.VERTEX_SHADER, `
+      attribute vec2 a_pos;
+      attribute vec4 a_color;
+      uniform float u_size;
+      uniform vec2 u_aspect;
+      varying vec4 v_color;
+      void main() {
+        gl_Position = vec4(a_pos * u_aspect, 0.0, 1.0);
+        gl_PointSize = u_size;
+        v_color = a_color;
+      }
+    `);
+
+    // Fragment Shader: Exact true shade and color of source image with crisp soft-circle edges
+    const fs = makeShader(gl, gl.FRAGMENT_SHADER, `
+      precision mediump float;
+      varying vec4 v_color;
+      void main() {
+        vec2 c = gl_PointCoord - vec2(0.5);
+        if (length(c) > 0.5) discard;
+        float a = smoothstep(0.5, 0.28, length(c)) * v_color.a;
+        // Output exact true color of the pixel without additive over-exposure:
+        gl_FragColor = vec4(v_color.rgb, a);
+      }
+    `);
+    const prog = gl.createProgram();
+    gl.attachShader(prog, vs); gl.attachShader(prog, fs); gl.linkProgram(prog);
+
+    const fadeVs = makeShader(gl, gl.VERTEX_SHADER, "attribute vec2 a; void main(){ gl_Position=vec4(a,0.,1.); }");
+    const fadeFs = makeShader(gl, gl.FRAGMENT_SHADER, "precision mediump float; void main(){ gl_FragColor=vec4(0.035,0.035,0.045,0.35); }");
+    const fadeProg = gl.createProgram();
+    gl.attachShader(fadeProg, fadeVs); gl.attachShader(fadeProg, fadeFs); gl.linkProgram(fadeProg);
+
+    const posBuf = gl.createBuffer();
+    const colBuf = gl.createBuffer();
+    const quadBuf = gl.createBuffer();
+    gl.bindBuffer(gl.ARRAY_BUFFER, quadBuf);
+    gl.bufferData(gl.ARRAY_BUFFER, new Float32Array([-1,-1, 1,-1, -1,1, -1,1, 1,-1, 1,1]), gl.STATIC_DRAW);
+
+    let isAutoResolution = true;
+    let particleCount = 52000;
+    let positions = new Float32Array(0);
+    let velocities = new Float32Array(0);
+    let targets = new Float32Array(0);
+    let srcPositions = new Float32Array(0);
+    let colors = new Float32Array(0);
+
+    let springStiffness = 2.0;
+    let damping = 0.92;
+
+    // Active Source state
+    let activeSourceType = 'pattern'; // 'pattern' | 'upload' | 'webcam' | 'drawing'
+    let uploadedImageElement = null;
+    let uploadedImageName = '';
+    let simulationMode = 'morph';
+
+    const mouse = { x: -999, y: -999, active: false };
+    window.addEventListener('mousemove', e => {
+      mouse.x = (e.clientX / window.innerWidth - 0.5) * 2;
+      mouse.y = (0.5 - e.clientY / window.innerHeight) * 2;
+      mouse.active = true;
+    });
+
+    const teslaImg = new Image();
+    teslaImg.crossOrigin = 'anonymous';
+    teslaImg.src = "/assets/aistudio/1790850885226_2_1da8f38b.jpg";
+
+    function updateSourceButtonHighlight() {
+      document.getElementById('btnUploadImage').classList.toggle('active', activeSourceType === 'upload');
+      document.getElementById('btnWebcam').classList.toggle('active', activeSourceType === 'webcam');
+      document.getElementById('btnDraw').classList.toggle('active', activeSourceType === 'drawing');
+      document.getElementById('btnPattern').classList.toggle('active', activeSourceType === 'pattern');
+
+      const statusName = document.getElementById('sourceStatusName');
+      const statusThumb = document.getElementById('sourceStatusThumb');
+      const actionBtn = document.getElementById('sourceActionBtn');
+
+      if (activeSourceType === 'upload' && uploadedImageElement) {
+        statusName.textContent = uploadedImageName || 'Uploaded Image';
+        statusThumb.src = uploadedImageElement.src;
+        actionBtn.style.display = 'inline-block';
+        actionBtn.textContent = 'Change';
+      } else if (activeSourceType === 'webcam') {
+        statusName.textContent = 'Live Webcam Feed';
+        statusThumb.src = "data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='22' height='22' viewBox='0 0 24 24' fill='none' stroke='%2338bdf8' stroke-width='2'><circle cx='12' cy='12' r='8'/></svg>";
+        actionBtn.style.display = 'none';
+      } else if (activeSourceType === 'drawing') {
+        statusName.textContent = 'Freehand Drawing Canvas';
+        statusThumb.src = "data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='22' height='22' viewBox='0 0 24 24' fill='none' stroke='%23ec4899' stroke-width='2'><path d='M18 2l4 4-14 14H4v-4L18 2z'/></svg>";
+        actionBtn.style.display = 'inline-block';
+        actionBtn.textContent = 'Edit';
+      } else {
+        statusName.textContent = 'Electric Wave Pattern';
+        statusThumb.src = "data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='22' height='22' viewBox='0 0 24 24' fill='none' stroke='%2338bdf8' stroke-width='2'><path d='M2 12c2.5-4 5-4 7 0s4.5 4 7 0 4.5-4 6 0'/></svg>";
+        actionBtn.style.display = 'none';
+      }
+
+      // Update particle resolution display
+      const resVal = document.getElementById('resVal');
+      if (isAutoResolution) {
+        resVal.textContent = particleCount.toLocaleString() + ' (Auto)';
+      } else {
+        resVal.textContent = particleCount.toLocaleString();
+      }
+    }
+
+    function computeAutoParticleCount(img) {
+      const w = img.naturalWidth || img.width || 400;
+      const h = img.naturalHeight || img.height || 600;
+      const total = w * h;
+      if (total >= 1200000) return 70000;
+      if (total >= 600000) return 60000;
+      if (total <= 150000) return 35000;
+      return 52000;
+    }
+
+    function initSimulation() {
+      const targetAspect = 9 / 16;
+      const viewAspect = window.innerWidth / window.innerHeight;
+      let fitH = 1.7, fitW = fitH * targetAspect * (window.innerHeight / window.innerWidth);
+      if (viewAspect <= targetAspect) {
+        fitW = 1.6;
+        fitH = fitW / (targetAspect * (window.innerHeight / window.innerWidth));
+      }
+
+      const cols = Math.round(Math.sqrt(particleCount * targetAspect));
+      const rows = Math.round(particleCount / cols);
+      const N = cols * rows;
+
+      // 1. Process Nikola Tesla Target Coordinates
+      const tCvs = document.createElement('canvas');
+      tCvs.width = cols; tCvs.height = rows;
+      const tCtx = tCvs.getContext('2d');
+      if (teslaImg.complete && teslaImg.naturalWidth > 0) {
+        tCtx.drawImage(teslaImg, 0, 0, cols, rows);
+      } else {
+        tCtx.fillStyle = '#09090b'; tCtx.fillRect(0, 0, cols, rows);
+        tCtx.fillStyle = '#f4f4f5'; tCtx.beginPath(); tCtx.arc(cols/2, rows*0.35, cols*0.28, 0, Math.PI*2); tCtx.fill();
+      }
+      const tData = tCtx.getImageData(0, 0, cols, rows).data;
+
+      const targetPoints = [];
+      for (let y = 0; y < rows; y++) {
+        for (let x = 0; x < cols; x++) {
+          const idx = (y * cols + x) * 4;
+          const lum = 0.299 * (tData[idx]/255) + 0.587 * (tData[idx+1]/255) + 0.114 * (tData[idx+2]/255);
+          targetPoints.push({
+            x: ((x / (cols - 1)) - 0.5) * fitW,
+            y: (0.5 - (y / (rows - 1))) * fitH,
+            lum
+          });
+        }
+      }
+      targetPoints.sort((a, b) => a.lum - b.lum);
+
+      // 2. Process Source Pixels based on activeSourceType
+      positions = new Float32Array(N * 2);
+      srcPositions = new Float32Array(N * 2);
+      velocities = new Float32Array(N * 2);
+      targets = new Float32Array(N * 2);
+      colors = new Float32Array(N * 4);
+
+      const srcPoints = [];
+
+      if (activeSourceType === 'upload' && uploadedImageElement && uploadedImageElement.complete) {
+        // Sample from Uploaded Image (preserving exact shade & true RGB colors)
+        const sCvs = document.createElement('canvas');
+        sCvs.width = cols; sCvs.height = rows;
+        const sCtx = sCvs.getContext('2d');
+        sCtx.drawImage(uploadedImageElement, 0, 0, cols, rows);
+        const sData = sCtx.getImageData(0, 0, cols, rows).data;
+
+        for (let y = 0; y < rows; y++) {
+          for (let x = 0; x < cols; x++) {
+            const idx = (y * cols + x) * 4;
+            const r = sData[idx] / 255;
+            const g = sData[idx + 1] / 255;
+            const b = sData[idx + 2] / 255;
+            const a = 1.0;
+            const lum = 0.299 * r + 0.587 * g + 0.114 * b;
+
+            const u = ((x / (cols - 1)) - 0.5) * 1.8;
+            const v = (0.5 - (y / (rows - 1))) * 1.8;
+            srcPoints.push({ x: u, y: v, r, g, b, a, lum });
+          }
+        }
+      } else if (activeSourceType === 'webcam' && camActive && video.readyState >= 2) {
+        const sCvs = document.createElement('canvas');
+        sCvs.width = cols; sCvs.height = rows;
+        const sCtx = sCvs.getContext('2d');
+        sCtx.translate(cols, 0); sCtx.scale(-1, 1);
+        sCtx.drawImage(video, 0, 0, cols, rows);
+        const sData = sCtx.getImageData(0, 0, cols, rows).data;
+
+        for (let y = 0; y < rows; y++) {
+          for (let x = 0; x < cols; x++) {
+            const idx = (y * cols + x) * 4;
+            const r = sData[idx] / 255;
+            const g = sData[idx + 1] / 255;
+            const b = sData[idx + 2] / 255;
+            const lum = 0.299 * r + 0.587 * g + 0.114 * b;
+            const u = ((x / (cols - 1)) - 0.5) * 1.8;
+            const v = (0.5 - (y / (rows - 1))) * 1.8;
+            srcPoints.push({ x: u, y: v, r, g, b, a: 1.0, lum });
+          }
+        }
+      } else if (activeSourceType === 'drawing') {
+        const drawCvs = document.getElementById('drawCanvas');
+        const sCvs = document.createElement('canvas');
+        sCvs.width = cols; sCvs.height = rows;
+        const sCtx = sCvs.getContext('2d');
+        sCtx.drawImage(drawCvs, 0, 0, cols, rows);
+        const sData = sCtx.getImageData(0, 0, cols, rows).data;
+
+        for (let y = 0; y < rows; y++) {
+          for (let x = 0; x < cols; x++) {
+            const idx = (y * cols + x) * 4;
+            const r = sData[idx] / 255;
+            const g = sData[idx + 1] / 255;
+            const b = sData[idx + 2] / 255;
+            const lum = 0.299 * r + 0.587 * g + 0.114 * b;
+            const u = ((x / (cols - 1)) - 0.5) * 1.8;
+            const v = (0.5 - (y / (rows - 1))) * 1.8;
+            srcPoints.push({ x: u, y: v, r, g, b, a: 1.0, lum });
+          }
+        }
+      } else {
+        // Procedural Wave Pattern
+        for (let i = 0; i < N; i++) {
+          const u = (i % cols) / cols - 0.5;
+          const v = 0.5 - Math.floor(i / cols) / rows;
+          const r = 0.2 + 0.8 * (0.5 + 0.5 * Math.sin(u * 10.0));
+          const g = 0.2 + 0.8 * (0.5 + 0.5 * Math.cos(v * 10.0));
+          const b = 0.85;
+          const lum = 0.299 * r + 0.587 * g + 0.114 * b;
+          srcPoints.push({ x: u * 1.8, y: v * 1.8, r, g, b, a: 1.0, lum });
+        }
+      }
+
+      // 1D Optimal Transport: Sort source pixels by luminance
+      srcPoints.sort((a, b) => a.lum - b.lum);
+
+      for (let i = 0; i < N; i++) {
+        positions[i*2] = srcPoints[i].x;
+        positions[i*2+1] = srcPoints[i].y;
+        srcPositions[i*2] = positions[i*2];
+        srcPositions[i*2+1] = positions[i*2+1];
+        targets[i*2] = targetPoints[i].x;
+        targets[i*2+1] = targetPoints[i].y;
+
+        // Exact shade and color from the uploaded picture:
+        colors[i*4] = srcPoints[i].r;
+        colors[i*4+1] = srcPoints[i].g;
+        colors[i*4+2] = srcPoints[i].b;
+        colors[i*4+3] = 1.0;
+
+        velocities[i*2] = (Math.random() - 0.5) * 0.02;
+        velocities[i*2+1] = (Math.random() - 0.5) * 0.02;
+      }
+
+      gl.bindBuffer(gl.ARRAY_BUFFER, colBuf);
+      gl.bufferData(gl.ARRAY_BUFFER, colors, gl.DYNAMIC_DRAW);
+      simulationMode = 'morph';
+    }
+
+    teslaImg.onload = initSimulation;
+    if (teslaImg.complete) initSimulation();
+
+    function resize() {
+      canvas.width = window.innerWidth;
+      canvas.height = window.innerHeight;
+      gl.viewport(0, 0, canvas.width, canvas.height);
+    }
+    window.addEventListener('resize', () => { resize(); initSimulation(); });
+    resize();
+
+    // Render loop
+    let lastTime = performance.now();
+    let frames = 0, fpsTimer = performance.now();
+
+    function loop(now) {
+      requestAnimationFrame(loop);
+      const dt = Math.min((now - lastTime) / 1000, 0.033);
+      lastTime = now;
+
+      frames++;
+      if (now - fpsTimer > 500) {
+        document.getElementById('fpsDisplay').textContent = Math.round(frames * 1000 / (now - fpsTimer));
+        frames = 0; fpsTimer = now;
+      }
+
+      const N = positions.length / 2;
+      for (let i = 0; i < N; i++) {
+        const i2 = i * 2;
+        let px = positions[i2], py = positions[i2+1];
+        let vx = velocities[i2], vy = velocities[i2+1];
+
+        let tx = targets[i2];
+        let ty = targets[i2+1];
+        if (simulationMode === 'source') {
+          tx = srcPositions[i2];
+          ty = srcPositions[i2+1];
+        }
+
+        // Direct, smooth spring easing without fluid turbulence
+        let fx = (tx - px) * springStiffness;
+        let fy = (ty - py) * springStiffness;
+
+        if (simulationMode === 'disperse') {
+          const ang = Math.atan2(py, px) + (Math.random() - 0.5) * 0.4;
+          fx = Math.cos(ang) * 1.5;
+          fy = Math.sin(ang) * 1.5;
+        }
+
+        if (mouse.active) {
+          const mdx = px - mouse.x, mdy = py - mouse.y;
+          const mdistSq = mdx*mdx + mdy*mdy;
+          if (mdistSq < 0.16 && mdistSq > 0.0001) {
+            const mdist = Math.sqrt(mdistSq);
+            const force = (1.0 - mdist / 0.4) * 2.0;
+            fx += (mdx / mdist) * force;
+            fy += (mdy / mdist) * force;
+          }
+        }
+
+        vx = (vx + fx * dt) * damping;
+        vy = (vy + fy * dt) * damping;
+        positions[i2] = px + vx * dt;
+        positions[i2+1] = py + vy * dt;
+        velocities[i2] = vx;
+        velocities[i2+1] = vy;
+      }
+
+      // Fade pass (smooth background clear, preserving true color saturation)
+      gl.useProgram(fadeProg);
+      gl.bindBuffer(gl.ARRAY_BUFFER, quadBuf);
+      const a = gl.getAttribLocation(fadeProg, 'a');
+      gl.enableVertexAttribArray(a);
+      gl.vertexAttribPointer(a, 2, gl.FLOAT, false, 0, 0);
+      gl.enable(gl.BLEND);
+      gl.blendFunc(gl.SRC_ALPHA, gl.ONE_MINUS_SRC_ALPHA);
+      gl.drawArrays(gl.TRIANGLES, 0, 6);
+
+      // Render Particles with Normal Alpha Blending (Preserves Exact Color of Uploaded Image)
+      gl.useProgram(prog);
+      gl.blendFunc(gl.SRC_ALPHA, gl.ONE_MINUS_SRC_ALPHA);
+      gl.uniform1f(gl.getUniformLocation(prog, 'u_size'), 2.6 * (window.devicePixelRatio||1));
+      let ax = canvas.width > canvas.height ? canvas.height / canvas.width : 1.0;
+      let ay = canvas.height > canvas.width ? canvas.width / canvas.height : 1.0;
+      gl.uniform2f(gl.getUniformLocation(prog, 'u_aspect'), ax, ay);
+
+      gl.bindBuffer(gl.ARRAY_BUFFER, posBuf);
+      gl.bufferData(gl.ARRAY_BUFFER, positions, gl.DYNAMIC_DRAW);
+      const pLoc = gl.getAttribLocation(prog, 'a_pos');
+      gl.enableVertexAttribArray(pLoc);
+      gl.vertexAttribPointer(pLoc, 2, gl.FLOAT, false, 0, 0);
+
+      gl.bindBuffer(gl.ARRAY_BUFFER, colBuf);
+      const cLoc = gl.getAttribLocation(prog, 'a_color');
+      gl.enableVertexAttribArray(cLoc);
+      gl.vertexAttribPointer(cLoc, 4, gl.FLOAT, false, 0, 0);
+
+      gl.drawArrays(gl.POINTS, 0, N);
+    }
+    requestAnimationFrame(loop);
+
+    // Image Upload Handling
+    const imageFileInput = document.getElementById('imageFileInput');
+    const btnUploadImage = document.getElementById('btnUploadImage');
+    const sourceActionBtn = document.getElementById('sourceActionBtn');
+
+    btnUploadImage.onclick = () => {
+      imageFileInput.click();
+    };
+
+    sourceActionBtn.onclick = () => {
+      if (activeSourceType === 'upload') {
+        imageFileInput.click();
+      } else if (activeSourceType === 'drawing') {
+        document.getElementById('drawModal').style.display = 'block';
+      }
+    };
+
+    function processUploadedFile(file) {
+      if (!file || !file.type.startsWith('image/')) {
+        alert('Please select a valid image file (PNG, JPG, WebP, etc.)');
+        return;
+      }
+      const reader = new FileReader();
+      reader.onload = (e) => {
+        const img = new Image();
+        img.onload = () => {
+          uploadedImageElement = img;
+          uploadedImageName = file.name;
+          activeSourceType = 'upload';
+
+          // Automatic particle resolution based on uploaded image dimensions
+          if (isAutoResolution) {
+            particleCount = computeAutoParticleCount(img);
+            document.getElementById('resSlider').value = particleCount;
+          }
+
+          updateSourceButtonHighlight();
+          initSimulation();
+        };
+        img.src = e.target.result;
+      };
+      reader.readAsDataURL(file);
+    }
+
+    imageFileInput.onchange = (e) => {
+      if (e.target.files && e.target.files[0]) {
+        processUploadedFile(e.target.files[0]);
+      }
+    };
+
+    // Drag and drop image upload onto window
+    const dropZone = document.getElementById('dropZoneOverlay');
+    window.addEventListener('dragover', (e) => {
+      e.preventDefault();
+      dropZone.style.display = 'flex';
+    });
+    window.addEventListener('dragleave', (e) => {
+      if (e.clientX <= 0 || e.clientY <= 0) {
+        dropZone.style.display = 'none';
+      }
+    });
+    window.addEventListener('drop', (e) => {
+      e.preventDefault();
+      dropZone.style.display = 'none';
+      if (e.dataTransfer && e.dataTransfer.files && e.dataTransfer.files[0]) {
+        processUploadedFile(e.dataTransfer.files[0]);
+      }
+    });
+
+    // Toggle Automatic Particle Count
+    const btnToggleAuto = document.getElementById('btnToggleAuto');
+    const manualSliderContainer = document.getElementById('manualSliderContainer');
+    btnToggleAuto.onclick = () => {
+      isAutoResolution = !isAutoResolution;
+      btnToggleAuto.textContent = isAutoResolution ? 'Auto: ON' : 'Manual';
+      manualSliderContainer.style.display = isAutoResolution ? 'none' : 'block';
+      if (isAutoResolution && uploadedImageElement) {
+        particleCount = computeAutoParticleCount(uploadedImageElement);
+        initSimulation();
+      }
+      updateSourceButtonHighlight();
+    };
+
+    // Webcam handling
+    const video = document.getElementById('webcamVideo');
+    let camActive = false;
+    document.getElementById('btnWebcam').onclick = async () => {
+      if (!camActive) {
+        try {
+          const stream = await navigator.mediaDevices.getUserMedia({ video: { width: 320, height: 240 } });
+          video.srcObject = stream;
+          video.play();
+          camActive = true;
+          activeSourceType = 'webcam';
+          updateSourceButtonHighlight();
+          setTimeout(initSimulation, 300);
+        } catch (err) {
+          alert("Webcam access unavailable or permission denied: " + err.message);
+        }
+      } else {
+        const stream = video.srcObject;
+        if (stream) stream.getTracks().forEach(t => t.stop());
+        camActive = false;
+        activeSourceType = 'pattern';
+        updateSourceButtonHighlight();
+        initSimulation();
+      }
+    };
+
+    // Freehand Drawing Modal
+    const drawCvs = document.getElementById('drawCanvas');
+    const dCtx = drawCvs.getContext('2d');
+    dCtx.fillStyle = '#09090b'; dCtx.fillRect(0,0,220,280);
+    let painting = false;
+    drawCvs.onmousedown = () => painting = true;
+    window.onmouseup = () => painting = false;
+    drawCvs.onmousemove = e => {
+      if (!painting) return;
+      const r = drawCvs.getBoundingClientRect();
+      dCtx.fillStyle = '#38bdf8';
+      dCtx.beginPath();
+      dCtx.arc(e.clientX - r.left, e.clientY - r.top, 8, 0, Math.PI*2);
+      dCtx.fill();
+    };
+    document.getElementById('btnDraw').onclick = () => {
+      document.getElementById('drawModal').style.display = 'block';
+    };
+    document.getElementById('btnCloseDraw').onclick = () => {
+      document.getElementById('drawModal').style.display = 'none';
+    };
+    document.getElementById('btnClearDraw').onclick = () => {
+      dCtx.fillStyle = '#09090b';
+      dCtx.fillRect(0,0,220,280);
+    };
+    document.getElementById('btnMorphDrawing').onclick = () => {
+      document.getElementById('drawModal').style.display = 'none';
+      activeSourceType = 'drawing';
+      updateSourceButtonHighlight();
+      initSimulation();
+    };
+
+    // Pattern generator
+    document.getElementById('btnPattern').onclick = () => {
+      activeSourceType = 'pattern';
+      updateSourceButtonHighlight();
+      initSimulation();
+    };
+
+    // Simulation Actions
+    document.getElementById('btnMorphTesla').onclick = () => {
+      simulationMode = 'morph';
+    };
+    document.getElementById('btnExplode').onclick = () => {
+      simulationMode = 'disperse';
+      setTimeout(() => { simulationMode = 'morph'; }, 1200);
+    };
+    document.getElementById('btnReset').onclick = () => {
+      simulationMode = 'source';
+    };
+
+    // Sliders
+    document.getElementById('resSlider').oninput = e => {
+      particleCount = parseInt(e.target.value);
+      updateSourceButtonHighlight();
+      initSimulation();
+    };
+    document.getElementById('springSlider').oninput = e => {
+      springStiffness = parseFloat(e.target.value);
+      document.getElementById('springVal').textContent = springStiffness.toFixed(1);
+    };
+    document.getElementById('dampSlider').oninput = e => {
+      damping = parseFloat(e.target.value);
+      document.getElementById('dampVal').textContent = damping.toFixed(2);
+    };
+
+    updateSourceButtonHighlight();
+  </script>
+</body>
+</html>

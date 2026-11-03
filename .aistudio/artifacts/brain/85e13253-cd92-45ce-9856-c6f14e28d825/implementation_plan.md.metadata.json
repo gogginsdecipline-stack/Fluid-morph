@@ -1,0 +1,6 @@
+{
+  "summary":  "Architectural and technical implementation plan for the Nikola Tesla Pixel-Morphing & Fluid Dynamics WebGL simulation. Details the WebGL particle pipeline (50,000–100,000 particles), luminance sorting and optimal transport mapping, Simplex curl-noise fluid dynamics, live webcam/canvas/upload ingestion, interactive HUD controls, and standalone single-file HTML generation.",
+  "updatedAt":  "2026-10-24T11:20:00.185459105Z",
+  "requestFeedback":  true,
+  "userFacing":  true
+}

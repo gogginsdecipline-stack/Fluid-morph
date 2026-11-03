@@ -1,0 +1,6 @@
+{
+  "name": "Tesla Pixel-Morph Fluid Simulation",
+  "description": "High-performance WebGL fluid dynamics and optimal transport pixel-morphing simulator into Nikola Tesla's portrait with webcam, drawing, and custom image inputs.",
+  "requestFramePermissions": ["camera"],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}
